@@ -1,0 +1,40 @@
+import * as vscode from "vscode";
+import { initRolldown } from "./bundler";
+import { PreviewPanel } from "./preview";
+
+declare namespace globalThis {
+  export let outputChannel: vscode.LogOutputChannel;
+  export let currentPerf: number;
+}
+
+globalThis.outputChannel;
+
+export function activate(context: vscode.ExtensionContext) {
+  initRolldown(context.extensionUri);
+  const output = vscode.window.createOutputChannel("Web Previewer", { log: true });
+  globalThis.outputChannel = output;
+  output.info(Object.keys(globalThis).join(", "));
+  output.info(
+    "sharedArrayBuffer is" +
+      (typeof SharedArrayBuffer !== "undefined" ? " supported" : " not supported"),
+  );
+  context.subscriptions.push(output);
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("web-previewer.startPreview", (uri?: vscode.Uri) => {
+      // Invoked from the explorer/editor title menus with a URI, or from the
+      // command palette with none (fall back to the active editor).
+      const target = uri instanceof vscode.Uri ? uri : vscode.window.activeTextEditor?.document.uri;
+      if (!target || !/\.html?$/i.test(target.path)) {
+        vscode.window.showErrorMessage("Web Previewer: open an HTML file to preview it.");
+        return;
+      }
+      PreviewPanel.show(context, target, output);
+    }),
+    vscode.commands.registerCommand("web-previewer.refreshPreview", () =>
+      PreviewPanel.refreshAll(),
+    ),
+  );
+}
+
+export function deactivate() {}

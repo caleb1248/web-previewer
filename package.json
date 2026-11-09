@@ -1,16 +1,59 @@
 {
   "name": "web-previewer",
   "displayName": "Web Previewer",
-  "description": "preview typescript projects in the browser",
   "version": "0.0.1",
-  "engines": {
-    "vscode": "^1.145.0"
-  },
+  "description": "Preview TypeScript projects in vscode.dev",
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
-  "main": "./dist/extension.js",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/caleb1248/web-previewer.git"
+  },
+  "publisher": "cleb-01",
+  "main": "./dist/extension.node.js",
+  "browser": "./dist/extension.browser.js",
+  "scripts": {
+    "vscode:prepublish": "bun run package",
+    "compile": "bun run check-types && bun run lint && bun esbuild.js",
+    "watch": "bun run -p watch:*",
+    "watch:esbuild": "bun esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "bun run check-types && bun run lint && bun esbuild.js --production",
+    "package:vsix": "bun scripts/package-vsix.js",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "bun run compile-tests && bun run compile && bun run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test",
+    "dev:web": "bun run --parallel watch:esbuild serve:web",
+    "serve:web": "vscode-test-web --extensionDevelopmentPath=. --coi"
+  },
+  "dependencies": {
+    "@rolldown/binding-wasm32-wasi": "https://registry.npmjs.org/@rolldown/binding-wasm32-wasi/-/binding-wasm32-wasi-1.3.0.tgz",
+    "@rolldown/browser": "^1.3.0",
+    "@vscode/sync-api-client": "^0.9.1",
+    "rolldown": "^1.3.0",
+    "web-worker": "^1.5.0"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "24.x",
+    "@types/vscode": "^1.145.0",
+    "@vscode/test-cli": "^0.0.15",
+    "@vscode/test-electron": "^3.0.0",
+    "@vscode/test-web": "^0.0.81",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.5.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.61.1"
+  },
+  "overrides": {
+    "diff": "^8.0.4",
+    "serialize-javascript": "^7.0.6"
+  },
   "contributes": {
     "commands": [
       {
@@ -47,43 +90,20 @@
           "when": "activeWebviewPanelId == 'webPreviewer.preview'"
         }
       ]
+    },
+    "configuration": {
+      "title": "Web Previewer",
+      "properties": {
+        "webPreviewer.sourceMaps": {
+          "type": "boolean",
+          "default": false,
+          "description": "Include inline source maps in preview bundles, so errors and the debugger point at your original files. Makes builds slower and the bundled output larger, especially with large dependencies or workers."
+        }
+      }
     }
   },
-  "scripts": {
-    "vscode:prepublish": "bun run package",
-    "compile": "bun run check-types && bun run lint && bun esbuild.js",
-    "watch": "bun run -p watch:*",
-    "watch:esbuild": "bun esbuild.js --watch",
-    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
-    "package": "bun run check-types && bun run lint && bun esbuild.js --production",
-    "compile-tests": "tsc -p . --outDir out",
-    "watch-tests": "tsc -p . -w --outDir out",
-    "pretest": "bun run compile-tests && bun run compile && bun run lint",
-    "check-types": "tsc --noEmit",
-    "lint": "eslint src",
-    "test": "vscode-test"
-  },
-  "devDependencies": {
-    "@types/mocha": "^10.0.10",
-    "@types/node": "24.x",
-    "@types/vscode": "^1.145.0",
-    "@vscode/test-cli": "^0.0.15",
-    "@vscode/test-electron": "^3.0.0",
-    "@vscode/test-web": "^0.0.81",
-    "esbuild": "^0.28.1",
-    "esbuild-wasm": "^0.28.2",
-    "eslint": "^10.5.0",
-    "typescript": "^6.0.3",
-    "typescript-eslint": "^8.61.1"
-  },
-  "overrides": {
-    "diff": "^8.0.4",
-    "serialize-javascript": "^7.0.6"
-  },
-  "dependencies": {
-    "@rolldown/binding-wasm32-wasi": "link:./rolldown-wasi",
-    "@vscode/sync-api-client": "^0.9.1",
-    "rolldown": "^1.3.0",
-    "web-worker": "^1.5.0"
+  "activationEvents": [],
+  "engines": {
+    "vscode": "^1.145.0"
   }
 }

@@ -1,8 +1,12 @@
 .vscode/**
 .vscode-test/**
+.vscode-test-web/**
 out/**
 node_modules/**
 src/**
+scripts/**
+rolldown-wasi/**
+vsix/**
 .gitignore
 .yarnrc
 esbuild.js
@@ -13,3 +17,4 @@ vsc-extension-quickstart.md
 **/*.ts
 **/.vscode-test.*
 bun.lock
+*.vsix

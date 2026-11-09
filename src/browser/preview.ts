@@ -1,6 +1,6 @@
-import * as vscode from 'vscode';
-import { dirname, initializeEsbuild } from './bundler';
-import { renderPreview } from './html';
+import * as vscode from "vscode";
+import { dirname, invalidateBuildCache } from "./bundler";
+import { renderPreview } from "./html";
 
 const REBUILD_DELAY_MS = 300;
 
@@ -13,11 +13,13 @@ export class PreviewPanel implements vscode.Disposable {
   private dependencies = new Set<string>();
   private rebuildTimer: ReturnType<typeof setTimeout> | undefined;
   private buildGeneration = 0;
+  /** Closes the "building" notification; set while one is showing. */
+  private finishProgress: (() => void) | undefined;
 
   static show(
     context: vscode.ExtensionContext,
     htmlUri: vscode.Uri,
-    output: vscode.OutputChannel,
+    output: vscode.LogOutputChannel,
   ): void {
     const existing = PreviewPanel.panels.get(htmlUri.toString());
     if (existing) {
@@ -35,7 +37,7 @@ export class PreviewPanel implements vscode.Disposable {
   private constructor(
     private readonly context: vscode.ExtensionContext,
     private readonly htmlUri: vscode.Uri,
-    private readonly output: vscode.OutputChannel,
+    private readonly output: vscode.LogOutputChannel,
   ) {
     const root = this.root();
     const roots = [
@@ -44,22 +46,26 @@ export class PreviewPanel implements vscode.Disposable {
       ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri),
     ];
     this.panel = vscode.window.createWebviewPanel(
-      'webPreviewer.preview',
+      "webPreviewer.preview",
       `Preview ${basename(htmlUri)}`,
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       { enableScripts: true, enableForms: true, localResourceRoots: roots },
     );
-    this.panel.iconPath = new vscode.ThemeIcon('preview');
+    this.panel.iconPath = new vscode.ThemeIcon("preview");
 
     this.disposables.push(
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((msg) => this.onMessage(msg)),
-      // Unsaved edits are read from the editor buffer, so preview as you type.
-      vscode.workspace.onDidChangeTextDocument((e) => this.onFileChanged(e.document.uri)),
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration("webPreviewer.sourceMaps", htmlUri)) {
+          this.rebuild();
+        }
+      }),
     );
-    // Changes made outside the editor (git checkout, codegen, bun install...).
+    // Rebuilds come only from the file system: saves from the editor and changes
+    // made outside it (git checkout, codegen, bun install...).
     const watcher = vscode.workspace.createFileSystemWatcher(
-      new vscode.RelativePattern(root, '**/*'),
+      new vscode.RelativePattern(root, "**/*"),
     );
     watcher.onDidChange((uri) => this.onFileChanged(uri));
     watcher.onDidCreate(() => this.scheduleRebuild()); // a new file may satisfy a failed import
@@ -76,7 +82,10 @@ export class PreviewPanel implements vscode.Disposable {
 
   private onFileChanged(uri: vscode.Uri): void {
     const key = uri.toString();
-    if (this.dependencies.has(key) || key.endsWith('/tsconfig.json')) {
+    if (key.includes("/node_modules/")) {
+      invalidateBuildCache(key);
+    }
+    if (this.dependencies.has(key) || key.endsWith("/tsconfig.json")) {
       this.scheduleRebuild();
     }
   }
@@ -86,20 +95,57 @@ export class PreviewPanel implements vscode.Disposable {
     this.rebuildTimer = setTimeout(() => this.rebuild(), REBUILD_DELAY_MS);
   }
 
+  /**
+   * Rebuilds the preview. One "building" notification stays up while builds are
+   * running, including ones that supersede each other, and closes when the
+   * newest build finishes.
+   */
   async rebuild(): Promise<void> {
+    if (!this.finishProgress) {
+      let finish!: () => void;
+      const finished = new Promise<void>((resolve) => (finish = resolve));
+      this.finishProgress = finish;
+      void vscode.window.withProgress(
+        {
+          location: vscode.ProgressLocation.Notification,
+          title: `Web Previewer: building ${basename(this.htmlUri)}...`,
+        },
+        () => finished,
+      );
+    }
+    const build = this.build(); // bumps buildGeneration synchronously
+    const generation = this.buildGeneration;
+    try {
+      await build;
+    } finally {
+      if (generation === this.buildGeneration) {
+        this.closeProgress();
+      }
+    }
+  }
+
+  private closeProgress(): void {
+    this.finishProgress?.();
+    this.finishProgress = undefined;
+  }
+
+  private async build(): Promise<void> {
+    // @ts-ignore
+    globalThis.currentPerf = performance.now();
     clearTimeout(this.rebuildTimer);
     const generation = ++this.buildGeneration;
     const started = Date.now();
     try {
-      this.output.appendLine(`[${basename(this.htmlUri)}] Initializing esbuild...`);
-      await initializeEsbuild(this.context.extensionUri);
       const html = await readText(this.htmlUri);
       const tsconfigRaw = await readTsconfig(this.root());
       const result = await renderPreview({
         htmlUri: this.htmlUri,
-        html: html ?? '',
+        html: html ?? "",
         root: this.root(),
         tsconfigRaw,
+        sourceMaps: vscode.workspace
+          .getConfiguration("webPreviewer", this.htmlUri)
+          .get<boolean>("sourceMaps", false),
         webview: this.panel.webview,
         outputChannel: this.output,
       });
@@ -108,34 +154,53 @@ export class PreviewPanel implements vscode.Disposable {
       }
       this.dependencies = result.dependencies;
       if (tsconfigRaw !== undefined) {
-        this.dependencies.add(vscode.Uri.joinPath(this.root(), 'tsconfig.json').toString());
+        this.dependencies.add(vscode.Uri.joinPath(this.root(), "tsconfig.json").toString());
       }
       for (const w of result.warnings) {
-        this.output.appendLine(`[build warning] ${formatMessage(w)}`);
+        this.output.warn(`[build] ${formatMessage(w)}`);
       }
       for (const e of result.errors) {
-        this.output.appendLine(`[build error] ${formatMessage(e)}`);
+        this.output.error(`[build] ${formatMessage(e)}`);
       }
-      this.output.appendLine(
-        `[${basename(this.htmlUri)}] built in ${Date.now() - started}ms` +
-          (result.errors.length ? ` with ${result.errors.length} error(s)` : ''),
-      );
+      const summary = `[${basename(this.htmlUri)}] built in ${Date.now() - started}ms`;
+      if (result.errors.length) {
+        this.output.error(`${summary} with ${result.errors.length} error(s)`);
+      } else {
+        this.output.info(summary);
+      }
       this.panel.webview.html = result.html;
     } catch (e) {
       if (generation !== this.buildGeneration) {
         return;
       }
       const message = e instanceof Error ? (e.stack ?? e.message) : String(e);
-      this.output.appendLine(`[error] ${message}`);
+      this.output.error(`[${basename(this.htmlUri)}] ${message}`);
       this.panel.webview.html = failurePage(message);
     }
   }
 
   private onMessage(msg: unknown): void {
     const m = msg as { type?: string; level?: string; text?: string };
-    if (m?.type === 'console') {
-      this.output.appendLine(`[console.${m.level}] ${m.text}`);
-      if (m.level === 'error') {
+    if (m?.type === "console") {
+      // The page's console level becomes the log level, so the output's level filter applies.
+      const text = `[console] ${m.text}`;
+      switch (m.level) {
+        case "error":
+          this.output.error(text);
+          break;
+        case "warn":
+          this.output.warn(text);
+          break;
+        case "debug":
+          this.output.debug(text);
+          break;
+        case "trace":
+          this.output.trace(text);
+          break;
+        default:
+          this.output.info(text);
+      }
+      if (m.level === "error") {
         this.output.show(true);
       }
     }
@@ -145,6 +210,7 @@ export class PreviewPanel implements vscode.Disposable {
     PreviewPanel.panels.delete(this.htmlUri.toString());
     clearTimeout(this.rebuildTimer);
     this.buildGeneration++;
+    this.closeProgress();
     this.disposables.forEach((d) => d.dispose());
     this.disposables.length = 0;
     this.panel.dispose();
@@ -164,11 +230,11 @@ async function readText(uri: vscode.Uri): Promise<string | undefined> {
 }
 
 async function readTsconfig(root: vscode.Uri): Promise<string | undefined> {
-  return readText(vscode.Uri.joinPath(root, 'tsconfig.json'));
+  return readText(vscode.Uri.joinPath(root, "tsconfig.json"));
 }
 
 function basename(uri: vscode.Uri): string {
-  return uri.path.slice(uri.path.lastIndexOf('/') + 1);
+  return uri.path.slice(uri.path.lastIndexOf("/") + 1);
 }
 
 function formatMessage(m: {
@@ -176,12 +242,12 @@ function formatMessage(m: {
   location?: { file: string; line: number; column: number } | null;
 }): string {
   return m.location
-    ? `${decodeURIComponent(m.location.file.replace(/^vfs:/, ''))}:${m.location.line}:${m.location.column}: ${m.text}`
+    ? `${decodeURIComponent(m.location.file.replace(/^vfs:/, ""))}:${m.location.line}:${m.location.column}: ${m.text}`
     : m.text;
 }
 
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 function loadingPage(): string {

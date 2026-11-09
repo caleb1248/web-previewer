@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
-import { bundle, BundleError, dirname } from './bundler';
-import type { Message } from 'esbuild-wasm/lib/browser.js';
+import { bundle, BundleError, dirname, FileTree } from './bundler';
+import type { BuildMessage as Message } from './bundler';
 
 export interface RenderOptions {
   htmlUri: vscode.Uri;
@@ -8,8 +8,10 @@ export interface RenderOptions {
   /** Root for absolute ("/foo.ts") references; the workspace folder containing the HTML file. */
   root: vscode.Uri;
   tsconfigRaw?: string;
+  /** Emit inline source maps (the webPreviewer.sourceMaps setting). */
+  sourceMaps?: boolean;
   webview: vscode.Webview;
-  outputChannel: vscode.OutputChannel;
+  outputChannel: vscode.LogOutputChannel;
 }
 
 export interface RenderResult {
@@ -30,7 +32,7 @@ function basename(uri: vscode.Uri): string {
 
 /**
  * Turns the user's HTML page into something a webview can display: local
- * <script src> / inline module scripts / stylesheets are bundled with esbuild
+ * <script src> / inline module scripts / stylesheets are bundled with rolldown
  * and inlined, and a <base> tag points relative URLs (images, fetch) at the
  * workspace through the webview resource scheme.
  */
@@ -41,19 +43,40 @@ export async function renderPreview(opts: RenderOptions): Promise<RenderResult> 
   const warnings: Message[] = [];
   let inlineCounter = 0;
 
+  // One snapshot of the workspace for every script and stylesheet on the page,
+  // taken the first time something needs bundling.
+  let fileTree: Promise<FileTree> | undefined;
+  const getFileTree = () => {
+    if (!fileTree) {
+      const started = Date.now();
+      opts.outputChannel.info(`[file tree] scanning ${opts.root.toString(true)}...`);
+      fileTree = FileTree.scan(opts.root).then((tree) => {
+        opts.outputChannel.info(
+          `[file tree] scanned ${tree.size} entries (${tree.directoriesListed} folders listed) ` +
+            `in ${Date.now() - started}ms`,
+        );
+        return tree;
+      });
+    }
+    return fileTree;
+  };
+
   const runBundle = async (
     entry: vscode.Uri,
     format: 'esm' | 'iife',
     virtualFiles?: Map<string, string>,
   ) => {
     try {
-      opts.outputChannel.appendLine(`[${basename(entry)}] bundling...`);
+      const tree = await getFileTree();
+      opts.outputChannel.info(`[${basename(entry)}] bundling...`);
       const out = await bundle({
         entry,
         format,
         root: opts.root,
         tsconfigRaw: opts.tsconfigRaw,
+        sourceMaps: opts.sourceMaps,
         virtualFiles,
+        fileTree: tree,
       });
       out.dependencies.forEach((d) => dependencies.add(d));
       warnings.push(...out.warnings);

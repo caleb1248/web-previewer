@@ -1,29 +1,27 @@
-# web-previewer README
+# Web Previewer
 
-preview typescript projects in vscode.dev
+Preview large Typescript/React Projects in `vscode.dev`, powered by Rolldown.
 
-## how to use
+## How to use
 
-- navigate to your html file file
-- open the command palette and run "start web preview" (or click the preview icon in the editor title bar / right-click the file in the explorer)
-- a webview will open up in an editor to the side
-- the preview rebuilds as you type (unsaved edits included) and when files change on disk
+- Navigate to your html file
+- Open the command palette and run "start web preview" (or click the preview icon in the editor title bar / right-click the file in the explorer)
+- A webview will open up in an editor to the side
+- The preview rebuilds when you save a file and when files change on disk
 - `console.*` output and uncaught errors from the page show up in the "Web Previewer" output channel
-- run "refresh web preview" to force a rebuild
+- Run "refresh web preview" to force a rebuild
 
-## notes
+## Notes
 
-- This project is initially starting as a desktop-only extension to speed up development. Once the core functionality is working, then support for the web will be added.
-- We also use bun as the package manager and script runner to speed up development.
+- Bun is the current package manager in order to speed up development.
 
-## under the hood
+## Under the hood
 
-- Scans the HTML for scripts, which are then passed in as esbuild-wasm entrypoints.
+- Scans the HTML for scripts, which are then passed in as Rolldown entrypoints.
   - `<script src="...">` pointing at local files (`.ts`, `.tsx`, `.js`, ...) is bundled and inlined. `type="module"` scripts are bundled as ESM, classic scripts as an IIFE.
   - inline `<script type="module">` blocks are bundled too, so they can import local files and packages.
   - `<link rel="stylesheet">` pointing at local files is bundled (resolving `@import`) and inlined as `<style>`. CSS imported from scripts is inlined as well.
   - remote URLs, import maps and other script types are left untouched.
-- esbuild-wasm runs in-process (its browser build, `worker: false`); `esbuild.wasm` is copied into `dist/` at build time and loaded through `vscode.workspace.fs`.
 - All module resolution and file reads go through a custom esbuild plugin backed by `vscode.workspace.fs` (preferring open editor buffers), not Node's `fs`, so it can work in vscode.dev later.
   - relative, root-absolute (`/src/main.ts`, relative to the workspace folder) and bare (`node_modules`) imports are supported, including `package.json` `exports` (with conditions and `*` patterns), `browser`, `module` and `main`.
   - TypeScript-style `./foo.js` → `foo.ts` resolution and extensionless/`index` imports work.
