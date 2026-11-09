@@ -103,7 +103,7 @@ export interface BundleInput {
    * of a page; when omitted, a new one is scanned for this build.
    */
   fileTree?: FileTree;
-  /** Emit an inline source map (the webPreviewer.sourceMaps setting). */
+  /** Emit an inline source map (the jsPreview.sourceMaps setting). */
   sourceMaps?: boolean;
 }
 
@@ -268,9 +268,9 @@ async function runRolldown(
  * Global (scoped to the output script, see joinChunks) that holds the
  * pre-bundled dependencies, keyed by the entry file's URI.
  */
-const DEPS_GLOBAL = "__webPreviewerDeps";
-const DEP_PREFIX = "\0web-previewer-dep:";
-const DEPS_ENTRY = "\0web-previewer-deps";
+const DEPS_GLOBAL = "__jsPreviewDeps";
+const DEP_PREFIX = "\0js-preview-dep:";
+const DEPS_ENTRY = "\0js-preview-deps";
 
 /** Modules a project file can import from node_modules through a dependency stub. */
 const DEP_LOADERS = new Set<Loader>(["js", "jsx", "ts", "tsx", "json"]);

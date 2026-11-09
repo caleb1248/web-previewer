@@ -19,7 +19,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(output);
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("web-previewer.startPreview", (uri?: vscode.Uri) => {
+    vscode.commands.registerCommand("js-preview.startPreview", (uri?: vscode.Uri) => {
       // Invoked from the explorer/editor title menus with a URI, or from the
       // command palette with none (fall back to the active editor).
       const target = uri instanceof vscode.Uri ? uri : vscode.window.activeTextEditor?.document.uri;
@@ -29,9 +29,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
       PreviewPanel.show(context, target, output);
     }),
-    vscode.commands.registerCommand("web-previewer.refreshPreview", () =>
-      PreviewPanel.refreshAll(),
-    ),
+    vscode.commands.registerCommand("js-preview.refreshPreview", () => PreviewPanel.refreshAll()),
   );
 }
 

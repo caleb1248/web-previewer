@@ -1,8 +1,8 @@
 {
-  "name": "web-previewer",
-  "displayName": "Web Previewer",
-  "version": "0.0.1",
-  "description": "Preview TypeScript projects in vscode.dev",
+  "name": "js-preview",
+  "displayName": "jsPreview",
+  "version": "0.0.2",
+  "description": "Preview JavaScript/TypeScript/React projects in vscode.dev",
   "categories": [
     "Other"
   ],
@@ -57,13 +57,13 @@
   "contributes": {
     "commands": [
       {
-        "command": "web-previewer.startPreview",
+        "command": "js-preview.startPreview",
         "title": "Start Web Preview",
         "category": "Web Previewer",
         "icon": "$(open-preview)"
       },
       {
-        "command": "web-previewer.refreshPreview",
+        "command": "js-preview.refreshPreview",
         "title": "Refresh Web Preview",
         "category": "Web Previewer",
         "icon": "$(refresh)"
@@ -72,29 +72,29 @@
     "menus": {
       "editor/title": [
         {
-          "command": "web-previewer.startPreview",
+          "command": "js-preview.startPreview",
           "when": "resourceExtname =~ /^\\.html?$/",
           "group": "navigation"
         }
       ],
       "explorer/context": [
         {
-          "command": "web-previewer.startPreview",
+          "command": "js-preview.startPreview",
           "when": "resourceExtname =~ /^\\.html?$/",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
-          "command": "web-previewer.refreshPreview",
-          "when": "activeWebviewPanelId == 'webPreviewer.preview'"
+          "command": "js-preview.refreshPreview",
+          "when": "activeWebviewPanelId == 'jsPreview.preview'"
         }
       ]
     },
     "configuration": {
       "title": "Web Previewer",
       "properties": {
-        "webPreviewer.sourceMaps": {
+        "jsPreview.sourceMaps": {
           "type": "boolean",
           "default": false,
           "description": "Include inline source maps in preview bundles, so errors and the debugger point at your original files. Makes builds slower and the bundled output larger, especially with large dependencies or workers."

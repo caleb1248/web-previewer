@@ -46,7 +46,7 @@ export class PreviewPanel implements vscode.Disposable {
       ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri),
     ];
     this.panel = vscode.window.createWebviewPanel(
-      "webPreviewer.preview",
+      "jsPreview.preview",
       `Preview ${basename(htmlUri)}`,
       { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true },
       { enableScripts: true, enableForms: true, localResourceRoots: roots },
@@ -57,7 +57,7 @@ export class PreviewPanel implements vscode.Disposable {
       this.panel.onDidDispose(() => this.dispose()),
       this.panel.webview.onDidReceiveMessage((msg) => this.onMessage(msg)),
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration("webPreviewer.sourceMaps", htmlUri)) {
+        if (e.affectsConfiguration("jsPreview.sourceMaps", htmlUri)) {
           this.rebuild();
         }
       }),
@@ -144,7 +144,7 @@ export class PreviewPanel implements vscode.Disposable {
         root: this.root(),
         tsconfigRaw,
         sourceMaps: vscode.workspace
-          .getConfiguration("webPreviewer", this.htmlUri)
+          .getConfiguration("jsPreview", this.htmlUri)
           .get<boolean>("sourceMaps", false),
         webview: this.panel.webview,
         outputChannel: this.output,
