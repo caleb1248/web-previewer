@@ -583,6 +583,13 @@ async function resolveSpecifier(
     return resolveFile(vscode.Uri.joinPath(importerDir, spec), ctx);
   }
   if (spec.startsWith("/")) {
+    // Vite-style public directory: when it exists, "/" imports resolve only there,
+    // and only as an exact file match (no extension or index resolution).
+    const publicDir = vscode.Uri.joinPath(root, "public");
+    if (await ctx.tree.isDirectory(publicDir)) {
+      const inPublic = vscode.Uri.joinPath(publicDir, spec);
+      return (await isFile(inPublic, ctx)) ? inPublic : undefined;
+    }
     return resolveFile(vscode.Uri.joinPath(root, spec), ctx);
   }
   return resolvePackage(spec, importerDir, ctx);
@@ -1010,6 +1017,19 @@ export class FileTree {
     try {
       const stat = await vscode.workspace.fs.stat(uri);
       return (stat.type & vscode.FileType.File) !== 0;
+    } catch {
+      return false;
+    }
+  }
+
+  async isDirectory(uri: vscode.Uri): Promise<boolean> {
+    const known = this.kind(uri);
+    if (known !== undefined) {
+      return known === "dir";
+    }
+    try {
+      const stat = await vscode.workspace.fs.stat(uri);
+      return (stat.type & vscode.FileType.Directory) !== 0;
     } catch {
       return false;
     }

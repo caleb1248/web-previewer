@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { PreviewPanel } from "./preview";
+import { installDependencies } from "../install";
 
 declare namespace globalThis {
   export let outputChannel: vscode.LogOutputChannel;
@@ -30,6 +31,9 @@ export function activate(context: vscode.ExtensionContext) {
       PreviewPanel.show(context, target, output);
     }),
     vscode.commands.registerCommand("js-preview.refreshPreview", () => PreviewPanel.refreshAll()),
+    vscode.commands.registerCommand("js-preview.installDependencies", () =>
+      installDependencies(output),
+    ),
   );
 }
 

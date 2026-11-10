@@ -67,6 +67,11 @@
         "title": "Refresh Web Preview",
         "category": "JS Preview",
         "icon": "$(refresh)"
+      },
+      {
+        "command": "js-preview.installDependencies",
+        "title": "Install Dependencies from package-lock.json",
+        "category": "JS Preview"
       }
     ],
     "menus": {
