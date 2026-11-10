@@ -59,13 +59,13 @@
       {
         "command": "js-preview.startPreview",
         "title": "Start Web Preview",
-        "category": "Web Previewer",
+        "category": "JS Preview",
         "icon": "$(open-preview)"
       },
       {
         "command": "js-preview.refreshPreview",
         "title": "Refresh Web Preview",
-        "category": "Web Previewer",
+        "category": "JS Preview",
         "icon": "$(refresh)"
       }
     ],
@@ -92,7 +92,7 @@
       ]
     },
     "configuration": {
-      "title": "Web Previewer",
+      "title": "JS Preview",
       "properties": {
         "jsPreview.sourceMaps": {
           "type": "boolean",

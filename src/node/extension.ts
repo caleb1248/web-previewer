@@ -9,7 +9,7 @@ declare namespace globalThis {
 globalThis.outputChannel;
 
 export function activate(context: vscode.ExtensionContext) {
-  const output = vscode.window.createOutputChannel("Web Previewer", { log: true });
+  const output = vscode.window.createOutputChannel("JS Preview", { log: true });
   globalThis.outputChannel = output;
   output.info(Object.keys(globalThis).join(", "));
   output.info(
@@ -24,7 +24,7 @@ export function activate(context: vscode.ExtensionContext) {
       // command palette with none (fall back to the active editor).
       const target = uri instanceof vscode.Uri ? uri : vscode.window.activeTextEditor?.document.uri;
       if (!target || !/\.html?$/i.test(target.path)) {
-        vscode.window.showErrorMessage("Web Previewer: open an HTML file to preview it.");
+        vscode.window.showErrorMessage("JS Preview: open an HTML file to preview it.");
         return;
       }
       PreviewPanel.show(context, target, output);

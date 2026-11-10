@@ -1,4 +1,4 @@
-# Web Previewer
+# JS Preview
 
 Preview large Typescript/React Projects in `vscode.dev`, powered by Rolldown.
 
@@ -8,7 +8,7 @@ Preview large Typescript/React Projects in `vscode.dev`, powered by Rolldown.
 - Open the command palette and run "start web preview" (or click the preview icon in the editor title bar / right-click the file in the explorer)
 - A webview will open up in an editor to the side
 - The preview rebuilds when you save a file and when files change on disk
-- `console.*` output and uncaught errors from the page show up in the "Web Previewer" output channel
+- `console.*` output and uncaught errors from the page show up in the "JS Preview" output channel
 - Run "refresh web preview" to force a rebuild
 
 ## Notes

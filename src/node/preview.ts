@@ -108,7 +108,7 @@ export class PreviewPanel implements vscode.Disposable {
       void vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: `Web Previewer: building ${basename(this.htmlUri)}...`,
+          title: `JS Preview: building ${basename(this.htmlUri)}...`,
         },
         () => finished,
       );
