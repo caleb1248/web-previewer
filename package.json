@@ -1,6 +1,6 @@
 {
   "name": "js-preview",
-  "displayName": "jsPreview",
+  "displayName": "JS Preview",
   "version": "0.0.2",
   "description": "Preview JavaScript/TypeScript/React projects in vscode.dev",
   "categories": [
@@ -58,7 +58,7 @@
     "commands": [
       {
         "command": "js-preview.startPreview",
-        "title": "Start Web Preview",
+        "title": "Start Preview",
         "category": "JS Preview",
         "icon": "$(open-preview)"
       },

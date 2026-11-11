@@ -36,36 +36,43 @@ export async function installDependencies(output: vscode.LogOutputChannel): Prom
     return;
   }
 
-  let lock: { lockfileVersion?: number; packages?: Record<string, LockPackage> };
+  let packages: Record<string, LockPackage>;
   try {
-    const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(root, "package-lock.json"));
-    lock = JSON.parse(new TextDecoder().decode(bytes));
+    const npmLock = await readOptional(vscode.Uri.joinPath(root, "package-lock.json"));
+    const bunLock =
+      npmLock === undefined ? await readOptional(vscode.Uri.joinPath(root, "bun.lock")) : undefined;
+    if (npmLock !== undefined) {
+      const lock = JSON.parse(npmLock) as { packages?: Record<string, LockPackage> };
+      if (!lock.packages) {
+        throw new Error(
+          "package-lock.json has no `packages` section (lockfileVersion 1). Regenerate it with npm 7 or later.",
+        );
+      }
+      packages = lock.packages;
+    } else if (bunLock !== undefined) {
+      packages = packagesFromBunLock(bunLock);
+    } else {
+      throw new Error(
+        "no package-lock.json or bun.lock in the project root. Create one with `npm install --package-lock-only` or `bun install --lockfile-only`.",
+      );
+    }
   } catch (e) {
-    const missing = e instanceof vscode.FileSystemError && e.code === "FileNotFound";
-    vscode.window.showErrorMessage(
-      missing
-        ? "JS Preview: no package-lock.json in the project root. Create one with `npm install --package-lock-only`."
-        : `JS Preview: could not read package-lock.json: ${errorText(e)}`,
-    );
-    return;
-  }
-  if (!lock.packages) {
-    vscode.window.showErrorMessage(
-      "JS Preview: package-lock.json has no `packages` section (lockfileVersion 1). Regenerate it with npm 7 or later.",
-    );
+    vscode.window.showErrorMessage(`JS Preview: ${errorText(e)}`);
     return;
   }
 
   const jobs: Job[] = [];
   let skipped = 0;
-  for (const [key, pkg] of Object.entries(lock.packages)) {
+  for (const [key, pkg] of Object.entries(packages)) {
     // "" is the project itself; keys outside node_modules are workspace packages.
     if (!key.startsWith("node_modules/") || pkg.inBundle) {
       continue;
     }
     const url = tarballUrl(key, pkg);
     // Native binaries are no use to a browser preview; wasm builds are.
-    const native = pkg.os || (pkg.cpu && !pkg.cpu.includes("wasm32"));
+    // bun.lock records a cpu bun doesn't know, such as wasm32, as "none".
+    const native =
+      pkg.os || (pkg.cpu && !pkg.cpu.includes("wasm32") && !pkg.cpu.includes("none"));
     if (pkg.link || native || !url) {
       output.info(`[install] skipping ${key}`);
       skipped++;
@@ -85,10 +92,16 @@ export async function installDependencies(output: vscode.LogOutputChannel): Prom
     },
     async (progress, token) => {
       let done = 0;
+      // Packages being installed right now, in the order they were started.
+      const active = new Set<string>();
+      const message = () =>
+        `${done}/${jobs.length}: ${[...active].map((key) => key.slice(key.lastIndexOf("node_modules/") + "node_modules/".length)).join(", ")}`;
       await pool(jobs, PACKAGE_CONCURRENCY, async (job) => {
         if (token.isCancellationRequested) {
           return;
         }
+        active.add(job.key);
+        progress.report({ message: message() });
         try {
           if (await installPackage(root, job)) {
             installed++;
@@ -100,10 +113,10 @@ export async function installDependencies(output: vscode.LogOutputChannel): Prom
           output.error(`[install] ${job.key}: ${errorText(e)}`);
         }
         done++;
-        progress.report({
-          increment: 100 / jobs.length,
-          message: `${done}/${jobs.length}`,
-        });
+        active.delete(job.key);
+        // Every report carries the message: VS Code batches reports and shows only
+        // the last one's message, so an increment-only report would blank it.
+        progress.report({ increment: 100 / jobs.length, message: message() });
       });
       return token.isCancellationRequested;
     },
@@ -130,6 +143,73 @@ export async function installDependencies(output: vscode.LogOutputChannel): Prom
   if (installed > 0) {
     void vscode.commands.executeCommand("js-preview.refreshPreview");
   }
+}
+
+/** The file's text, or undefined if it doesn't exist. */
+async function readOptional(uri: vscode.Uri): Promise<string | undefined> {
+  try {
+    return new TextDecoder().decode(await vscode.workspace.fs.readFile(uri));
+  } catch (e) {
+    if (e instanceof vscode.FileSystemError && e.code === "FileNotFound") {
+      return undefined;
+    }
+    throw e;
+  }
+}
+
+/**
+ * Converts bun.lock's `packages` into package-lock.json's shape. Keys are
+ * dependency paths ("parent/child" is child nested under parent), and values are
+ * tuples: `["name@version", registry, { os, cpu, ... }, integrity]` for registry
+ * packages, `["name@https://...tgz", { ... }, integrity]` for tarball URLs. Other
+ * sources (workspace, git, file) come out without a URL and are skipped.
+ */
+function packagesFromBunLock(text: string): Record<string, LockPackage> {
+  // bun.lock is JSON with trailing commas.
+  const json = text.replace(
+    /("(?:[^"\\]|\\.)*")|,(\s*[}\]])/g,
+    (_m, str: string | undefined, tail: string) => str ?? tail,
+  );
+  const lock = JSON.parse(json) as { packages?: Record<string, unknown[]> };
+  if (!lock.packages) {
+    throw new Error("bun.lock has no `packages` section.");
+  }
+  const list = (value: unknown): string[] | undefined =>
+    value === undefined ? undefined : ([] as unknown[]).concat(value).map(String);
+
+  const packages: Record<string, LockPackage> = {};
+  for (const [key, entry] of Object.entries(lock.packages)) {
+    const id = String(entry[0]);
+    const at = id.indexOf("@", 1);
+    const name = id.slice(0, at);
+    const spec = id.slice(at + 1);
+    const meta = entry.find((e) => typeof e === "object" && e !== null) as
+      | { os?: unknown; cpu?: unknown }
+      | undefined;
+    const integrity = entry.find((e) => typeof e === "string" && /^sha\d+-/.test(e));
+    const pkg: LockPackage = {
+      name,
+      integrity: integrity as string | undefined,
+      os: list(meta?.os),
+      cpu: list(meta?.cpu),
+    };
+    if (/^https?:\/\//.test(spec)) {
+      pkg.resolved = spec;
+    } else if (/^\d/.test(spec) && typeof entry[1] === "string") {
+      pkg.version = spec;
+      const registry = entry[1];
+      pkg.resolved = registry.endsWith(".tgz")
+        ? registry
+        : `${(registry || REGISTRY).replace(/\/$/, "")}/${name}/-/${name.split("/").pop()}-${spec}.tgz`;
+    } else {
+      pkg.resolved = spec; // not a registry tarball; skipped by tarballUrl
+    }
+
+    // "a/@s/b/c" -> "node_modules/a/node_modules/@s/b/node_modules/c"
+    const names = key.match(/(@[^/]+\/)?[^/]+/g) ?? [];
+    packages[names.map((n) => `node_modules/${n}`).join("/")] = pkg;
+  }
+  return packages;
 }
 
 async function pickRoot(): Promise<vscode.Uri | undefined> {
