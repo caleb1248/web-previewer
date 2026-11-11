@@ -70,7 +70,7 @@
       },
       {
         "command": "js-preview.installDependencies",
-        "title": "Install Dependencies from package-lock.json",
+        "title": "Install Dependencies from NPM",
         "category": "JS Preview"
       }
     ],

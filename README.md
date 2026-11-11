@@ -1,6 +1,6 @@
 # JS Preview
 
-Preview large Typescript/React Projects in `vscode.dev`, powered by Rolldown.
+A tool to preview large Typescript/React Projects in `vscode.dev`, powered by Rolldown.
 
 ## Features
 
@@ -23,16 +23,15 @@ If these situations don't apply to you, you probably do not need this extension.
 ## HTML previewing
 
 - Navigate to your html file
-- Open the command palette and select "JS Preview: Start Preview" (or click the preview icon in the editor title bar / right-click the file in the explorer)
+- Open the command palette and select `JS Preview: Start Preview` (or click the preview icon in the editor title bar / right-click the file in the explorer)
 - A webview will open up in an editor to the side
 - The preview rebuilds when you save a file and when files change on disk
 - `console` output and uncaught errors from the page show up in the "JS Preview" output channel
 
 ## Dependency Installation
 
-## Notes
-
-- Bun is the current package manager in order to speed up development.
+- Open the command palette and select `JS Preview: Install Dependencies from NPM`
+- It may take a while depending on how many packages need to be installed.
 
 ## Under the hood
 
